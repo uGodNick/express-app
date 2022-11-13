@@ -15,11 +15,7 @@ export class UserController {
   public async initializeRoutes() {
     this.router.post(this.path + "signup", this.signUpUser);
     this.router.post(this.path + "signin", this.signInUser);
-    this.router.post(
-      this.path + "signin/new_token",
-      this.authenticateToken,
-      this.updateUserToken
-    );
+    this.router.post(this.path + "signin/new_token", this.refreshUserToken);
     this.router.get(
       this.path + "info",
       this.authenticateToken,
@@ -39,13 +35,12 @@ export class UserController {
     });
 
     if (!tokens) {
-      response.status(401).send({ message: "Unauthorized" });
-    } else {
-      response.status(201).send({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
+      return response.status(401).send({ message: "Unauthorized" });
     }
+    return response.status(201).send({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
   };
 
   private signInUser = async (request: Request, response: Response) => {
@@ -55,28 +50,26 @@ export class UserController {
     });
 
     if (!tokens) {
-      response.status(401).send({ message: "Unauthorized" });
-    } else {
-      response.status(200).send({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
+      return response.status(401).send({ message: "Unauthorized" });
     }
+    return response.status(200).send({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
   };
 
-  private updateUserToken = async (request: Request, response: Response) => {
-    const tokens = await this.userService.updateToken(
+  private refreshUserToken = async (request: Request, response: Response) => {
+    const token = await this.userService.refreshToken(
       request.body.refreshToken
     );
 
-    if (!tokens) {
-      response.status(401).send({ message: "Unauthorized" });
-    } else {
-      response.status(200).send({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
+    if (!token) {
+      return response.status(401).send({ message: "Unauthorized" });
     }
+
+    return response.status(200).send({
+      accessToken: token,
+    });
   };
 
   private getUserInfo = async (request: Request, response: Response) => {
@@ -86,10 +79,10 @@ export class UserController {
   private logoutUser = async (request: Request, response: Response) => {
     const { token, tokenExp } = request;
     await this.userService.logout(token, tokenExp);
-    response.status(200).send({ message: "log outed" });
+    return response.status(200).send({ message: "Signed out" });
   };
 
-  private authenticateToken = async (
+  public authenticateToken = async (
     request: Request,
     response: Response,
     next: any
@@ -103,8 +96,8 @@ export class UserController {
       });
     }
 
-    const inDenyList = await this.userService.inDenyList(token);
-    if (inDenyList) {
+    const inInDenyList = await this.userService.inInDenyList(token);
+    if (inInDenyList) {
       return response.status(401).send({
         message: "JWT Rejected",
       });

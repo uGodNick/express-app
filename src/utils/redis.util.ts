@@ -1,7 +1,7 @@
 import { createClient } from "redis";
 
 export class Redis {
-  public redisClient: ReturnType<typeof createClient> | undefined;
+  private redisClient: ReturnType<typeof createClient> | undefined;
   constructor() {}
 
   public connect = async () => {
@@ -14,7 +14,7 @@ export class Redis {
         console.log(error);
       });
       this.redisClient.on("connect", () => {
-        console.log("Redis connected!");
+        console.debug("Redis connected!");
       });
 
       await this.redisClient.connect();

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 
-import { User } from "../interfaces/user.interface";
-import { Tokens } from "../interfaces/token.interface";
+import { IUser } from "../interfaces/user.interface";
+import { ITokens } from "../interfaces/token.interface";
 import { userQueries } from "../sql/user.sql";
 import { Connector } from "../utils/connector.util";
 import { genSalt, hash, compare } from "bcryptjs";
@@ -9,23 +9,14 @@ import { Redis } from "utils/redis.util";
 
 export class UserService {
   private connector: Connector;
-  private refreshTokenSecret: string;
-  private accessTokenSecret: string;
   private redis: Redis;
 
-  constructor(
-    connector: Connector,
-    redis: Redis,
-    refreshTokenSecret: string,
-    accessTokenSecret: string
-  ) {
+  constructor(connector: Connector, redis: Redis) {
     this.connector = connector;
-    this.refreshTokenSecret = refreshTokenSecret;
-    this.accessTokenSecret = accessTokenSecret;
     this.redis = redis;
   }
 
-  public signUpUser = async (dto: User): Promise<Tokens | null> => {
+  public signUpUser = async (dto: IUser): Promise<ITokens | null> => {
     const salt = await genSalt(10);
     await this.connector.execute(userQueries.createUser, [
       dto.id,
@@ -35,14 +26,14 @@ export class UserService {
     return await this.signInUser(dto);
   };
 
-  public getUser = async (id: string): Promise<User | undefined> => {
-    const data = await this.connector.execute<User[]>(userQueries.getUser, [
+  public getUser = async (id: string): Promise<IUser | null> => {
+    const data = await this.connector.execute<IUser[]>(userQueries.getUser, [
       id,
     ]);
-    return data.length ? data[0] : undefined;
+    return data.length ? data[0] : null;
   };
 
-  public signInUser = async (dto: User): Promise<Tokens | null> => {
+  public signInUser = async (dto: IUser): Promise<ITokens | null> => {
     const user = await this.getUser(dto.id);
     if (!user) {
       return null;
@@ -52,51 +43,54 @@ export class UserService {
       return null;
     }
 
-    return this.generateTokens(user.id);
+    return {
+      accessToken: await this.generateAccessToken(user.id),
+      refreshToken: await this.generateRefreshToken(user.id),
+    };
   };
 
-  public updateToken = async (refreshToken: string): Promise<Tokens | null> => {
-    return await new Promise<Tokens | null>((resolve, reject) => {
+  public refreshToken = async (
+    refreshToken: string
+  ): Promise<string | null> => {
+    return await new Promise<string | null>((resolve) => {
       jwt.verify(
         refreshToken,
-        this.refreshTokenSecret,
+        process.env.REFRESH_TOKEN_SECRET!,
         async (err, payload) => {
           if (err || !payload) {
             resolve(null);
           } else {
             const { userId } = payload as jwt.JwtPayload;
-            resolve(userId);
+            resolve(await this.generateAccessToken(userId));
           }
         }
       );
     });
   };
 
-  private generateTokens = async (userId: string): Promise<Tokens> => {
-    const accessToken = jwt.sign(
+  private generateAccessToken = async (userId: string): Promise<string> => {
+    return jwt.sign(
       {
         userId,
       },
-      this.accessTokenSecret,
+      process.env.ACCESS_TOKEN_SECRET!,
       {
         expiresIn: "10m",
       }
     );
+  };
 
-    const refreshToken = jwt.sign(
+  private generateRefreshToken = async (userId: string): Promise<string> => {
+    return jwt.sign(
       {
         userId,
       },
-      this.refreshTokenSecret,
+      process.env.REFRESH_TOKEN_SECRET!,
       { expiresIn: "1d" }
     );
-    return {
-      accessToken,
-      refreshToken,
-    };
   };
 
-  public inDenyList = async (token: string): Promise<string | null> => {
+  public inInDenyList = async (token: string): Promise<string | null> => {
     return await this.redis.get(`bl_${token}`);
   };
 

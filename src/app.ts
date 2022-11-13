@@ -1,21 +1,16 @@
 import express from "express";
+import cors from "cors";
 import * as bodyParser from "body-parser";
-import { Connector } from "./utils/connector.util";
+
 import { initQueries } from "./sql/init.sql";
-import { Redis } from "utils/redis.util";
+import { Connector } from "./utils/connector.util";
+import { Redis } from "./utils/redis.util";
 
 export class App {
   public app: express.Application;
-  public port: number;
 
-  constructor(
-    controllers: any[],
-    port: number,
-    connector: Connector,
-    redis: Redis
-  ) {
+  constructor(controllers: any[], connector: Connector, redis: Redis) {
     this.app = express();
-    this.port = port;
 
     this.initializeDatabaseConnection(connector);
     this.initializeRedisConnection(redis);
@@ -25,6 +20,7 @@ export class App {
 
   private async initializeMiddleware() {
     this.app.use(bodyParser.json());
+    this.app.use(cors());
   }
 
   private async initializeControllers(controllers: any[]) {
@@ -44,8 +40,8 @@ export class App {
   }
 
   public async listen() {
-    this.app.listen(this.port, () => {
-      console.log(`App listening on the port ${this.port}`);
+    this.app.listen(process.env.APP_PORT!, () => {
+      console.log(`App listening on the port ${process.env.APP_PORT!}`);
     });
   }
 }
